@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>盯盘面板（含图表）</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css" />
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0b1220; color:#e5e7eb; }
+      .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+      h1 { font-size: 20px; margin-bottom: 12px; }
+      .card { background:#111827; border:1px solid #1f2937; border-radius:10px; padding: 14px; margin-bottom: 16px; }
+      .row { display:flex; gap:12px; align-items:center; flex-wrap: wrap; }
+      input, select, button { height: 32px; border-radius: 8px; border:1px solid #374151; background:#0b1220; color:#e5e7eb; padding: 0 10px; }
+      button { background:#1f2937; cursor:pointer; }
+      button:hover { background:#374151; }
+      table { width:100%; border-collapse: collapse; font-size: 14px; }
+      th, td { border-bottom:1px solid #1f2937; padding: 10px; text-align: left; }
+      th { color:#9ca3af; font-weight: 600; }
+      tr:hover td { background: #0f172a; }
+      .pos { color:#10b981; }
+      .neg { color:#ef4444; }
+      .symbol { font-weight: 600; }
+      .details { background:#0b1220; border:1px dashed #1f2937; margin-top:8px; border-radius:8px; padding: 12px; }
+      .metric { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .metric div { background:#0b1220; border:1px solid #1f2937; border-radius:8px; padding:8px; }
+      .chart-wrap { position: relative; height: 260px; }
+      .chart-wrap.small { height: 180px; }
+      .muted { color:#9ca3af; }
+      .tiny { font-size: 12px; }
+      .actions { display:flex; gap:6px; }
+      .controls { display:flex; gap:8px; align-items:center; margin: 8px 0; }
+      /* tabs */
+      .tabs { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+      .tab { background:#1f2937; border:1px solid #374151; border-radius:8px; height:32px; padding:0 12px; cursor:pointer; }
+      .tab.active { background:#374151; border-color:#4b5563; }
+      .help-link { cursor: pointer; text-decoration: underline; color:#9ca3af; }
+      .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:50; }
+      .modal-content { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:16px; max-width:640px; width:92%; color:#e5e7eb; }
+      .modal-content h3 { margin:0 0 8px 0; font-size:16px; }
+      .modal-content .muted { color:#9ca3af; }
+      .modal-actions { display:flex; justify-content:flex-end; margin-top:12px; }
+      .modal-actions button { height:28px; }
+     </style>
+     <!-- React & Babel CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Chart.js & time adapter & zoom plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      const API_BASE = '';
+
+      function fmtNum(n, digits = 2) {
+        if (n === null || n === undefined || Number.isNaN(n)) return '-';
+        const v = Number(n);
+        return v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+      }
+      function fmtPct(n) {
+        if (n === null || n === undefined || Number.isNaN(n)) return '-';
+        const v = Number(n);
+        return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+      }
+
+      // 指标帮助内容映射（简要定义与意义）
+      const HELP_MAP = {
+        pe: { title:'PE(TTM)', def:'市盈率，按过去十二个月每股收益计算，衡量市场对公司盈利的定价水平。', meaning:'一般而言，PE越高代表成长预期更强，但也可能估值偏贵，需要结合行业与增长判断。' },
+        forward_pe: { title:'Forward PE', def:'前瞻市盈率，使用未来一年预期每股收益计算。', meaning:'更强调未来盈利能力，适合成长型公司估值比较。' },
+        ps: { title:'PS(TTM)', def:'市销率，按过去十二个月收入计算，适合利润不稳定或尚未盈利公司。', meaning:'低PS可能代表更具性价比，但需结合利润率与增长判断。' },
+        pb: { title:'PB', def:'市净率，股价与每股净资产之比。', meaning:'适用于资产密集型行业；过低PB可能有价值，需关注资产质量。' },
+        peg: { title:'PEG', def:'市盈增长比，PE除以盈利增速。', meaning:'PEG≈1常被视为合理估值参考，明显高于1可能偏贵。' },
+        beta: { title:'Beta', def:'相对市场波动性系数。', meaning:'Beta>1更波动、风险更高；Beta<1较稳定。' },
+        dividend_yield: { title:'股息率', def:'每年分红占股价比例。', meaning:'适合收入型投资，需注意分红可持续性。' },
+        payout_ratio: { title:'分红率', def:'分红占净利润比例。', meaning:'过高分红率可能不可持续；需关注现金流与再投资需求。' },
+        gross_margins: { title:'毛利率', def:'毛利润占收入比例，反映产品/服务的定价能力与成本结构。', meaning:'毛利率越高越有利，但需关注趋势与行业对比。' },
+        operating_margins: { title:'营业利润率', def:'营业利润占收入比例，反映经营效率。', meaning:'越高表示效率越好，结合费用率与规模效应分析。' },
+        profit_margins: { title:'净利率', def:'净利润占收入比例。', meaning:'越高代表盈利质量更佳；需关注一次性项目影响。' },
+        roe: { title:'ROE', def:'净资产收益率，净利润/股东权益。', meaning:'衡量资本使用效率，长期高ROE公司更具竞争力。' },
+        roa: { title:'ROA', def:'总资产收益率，净利润/总资产。', meaning:'衡量资产使用效率，适合跨行业横向比较。' },
+        // 财务快照
+        revenue: { title:'收入', def:'公司在报告期内的营业收入。', meaning:'关注增长率与结构变化（地区/产品）。' },
+        gross_profit: { title:'毛利润', def:'收入减去营业成本。', meaning:'结合毛利率判断产品竞争力与成本控制。' },
+        operating_income: { title:'营业利润', def:'业务层面利润（含销售管理费用影响）。', meaning:'反映经营效率与规模效应。' },
+        net_income: { title:'净利润', def:'扣除税费与非经常项后的最终利润。', meaning:'持续性与质量最重要，关注现金流匹配。' },
+        assets: { title:'资产', def:'公司拥有或控制的经济资源总额。', meaning:'关注资产结构与资产周转效率。' },
+        liabilities: { title:'负债', def:'公司对外承担的债务与义务。', meaning:'过高负债提高财务风险，关注偿债能力。' },
+        equity: { title:'股东权益', def:'资产减负债的剩余权益。', meaning:'权益增长反映内生增长与价值创造。' },
+        operating_cash_flow: { title:'经营现金流', def:'来自主营业务的现金净流量。', meaning:'与净利润匹配度决定盈利质量。' },
+        capital_expenditures: { title:'资本开支', def:'用于长期资产的投资支出。', meaning:'高CAPEX需关注投资回报与自由现金流。' },
+        free_cash_flow: { title:'自由现金流', def:'经营现金流减资本开支。', meaning:'公司可自由分配的现金，支撑分红、回购与再投资。' },
+      };
+      function App() {
+        const [symbols, setSymbols] = useState([]);
+        const [prices, setPrices] = useState({});
+        const [input, setInput] = useState('');
+        const [expanded, setExpanded] = useState(new Set());
+        const [history, setHistory] = useState({});
+        const [params, setParams] = useState({}); // {SYM: {period, interval}}
+        const chartsRef = useRef({}); // {SYM: {price, indicator}}
+        const timersRef = useRef({}); // {SYM: {intervalId, backoffTimer}}
+        const historyCacheRef = useRef({}); // {SYM: {key: {data, ts}}}
+        const inflightRef = useRef({}); // {SYM: boolean}
+        const backoffRef = useRef({}); // {SYM: {ms, timer}}
+        // tabs
+        const [tab, setTab] = useState('watchlist');
+        const [hot, setHot] = useState([]);
+        const [indices, setIndices] = useState([]);
+        const [idxExpanded, setIdxExpanded] = useState(new Set());
+        const [idxConPrices, setIdxConPrices] = useState({});
+        const [idxCat, setIdxCat] = useState('global'); // indices category: 'global' | 'sector_etf'
+ const [infoExpanded, setInfoExpanded] = useState(new Set());
+          const [companyData, setCompanyData] = useState({});
+          const [showHelp, setShowHelp] = useState(false);
+          const [helpKey, setHelpKey] = useState(null);
+          const openHelp = (key) => { setHelpKey(key); setShowHelp(true); };
+          const closeHelp = () => setShowHelp(false);
+
+          // 投资组合状态与引用
+          const [portfolio, setPortfolio] = useState([]);
+          const [pfSymbol, setPfSymbol] = useState('');
+          const [pfQty, setPfQty] = useState('');
+          const [portfolioPrices, setPortfolioPrices] = useState({});
+          const pfChartRef = useRef(null);
+
+        // Load watchlist
+        const loadWatchlist = async () => {
+          const r = await fetch(`${API_BASE}/api/watchlist`);
+          const j = await r.json();
+          setSymbols(j.symbols || []);
+        };
+        // Poll prices
+        const loadPrices = async () => {
+          try {
+            const r = await fetch(`${API_BASE}/api/prices`);
+            const j = await r.json();
+            const map = {};
+            for (const item of (j.results || [])) map[item.symbol] = item;
+            setPrices(map);
+          } catch (e) { console.error('prices error', e); }
+        };
+        useEffect(() => {
+          loadWatchlist();
+          loadPrices();
+          const t = setInterval(loadPrices, 15000);
+          return () => clearInterval(t);
+        }, []);
+
+        // Add/remove symbol
+        const addSymbol = async () => {
+          const sym = (input || '').trim().toUpperCase();
+          if (!sym) return;
+          try {
+            const r = await fetch(`${API_BASE}/api/watchlist`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ symbol: sym }) });
+            const j = await r.json();
+            setSymbols(j.symbols || []);
+            setInput('');
+            loadPrices();
+          } catch (e) { console.error('add error', e); }
+        };
+        const addSymbolDirect = async (sym) => {
+          const s = (sym || '').trim().toUpperCase();
+          if (!s) return;
+          try {
+            const r = await fetch(`${API_BASE}/api/watchlist`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ symbol: s }) });
+            const j = await r.json();
+            setSymbols(j.symbols || []);
+            loadPrices();
+          } catch (e) { console.error('add direct error', e); }
+        };
+        const removeSymbol = async (s) => {
+          try {
+            const r = await fetch(`${API_BASE}/api/watchlist/${encodeURIComponent(s)}`, { method:'DELETE' });
+            const j = await r.json();
+            setSymbols(j.symbols || []);
+            const ex = new Set(expanded); ex.delete(s); setExpanded(ex);
+            const exInfo = new Set(infoExpanded); exInfo.delete(s); setInfoExpanded(exInfo);
+            setCompanyData(prev => { const next = { ...prev }; delete next[s]; return next; });
+            // Destroy charts & timers
+            const ch = chartsRef.current[s];
+            if (ch?.price) { ch.price.destroy(); }
+            if (ch?.indicator) { ch.indicator.destroy(); }
+            delete chartsRef.current[s];
+            const tm = timersRef.current[s];
+            if (tm?.intervalId) { clearInterval(tm.intervalId); }
+            if (tm?.backoffTimer) { clearTimeout(tm.backoffTimer); }
+            delete timersRef.current[s];
+            delete backoffRef.current[s];
+          } catch (e) { console.error('remove error', e); }
+        };
+
+        // Fetch history with cache & backoff
+        const fetchHistory = async (s, override = {}, opts = {}) => {
+          const p = params[s] || { period:'3y', interval:'1d' };
+          const q = { ...p, ...override };
+          const key = `${q.period}|${q.interval}`;
+          const TTL = 90 * 1000; // 90s
+          const now = Date.now();
+          const cacheSym = historyCacheRef.current[s] || {};
+          const cacheItem = cacheSym[key];
+          if (!opts.nocache && cacheItem && (now - cacheItem.ts) < TTL) {
+            setParams(prev => ({ ...prev, [s]: q }));
+            setHistory(h => ({ ...h, [s]: cacheItem.data }));
+            setTimeout(() => { renderPriceChart(s, cacheItem.data); renderIndicatorChart(s, cacheItem.data); }, 0);
+            return true;
+          }
+          if (inflightRef.current[s]) return false;
+          inflightRef.current[s] = true;
+          try {
+            const url = `${API_BASE}/api/history/${encodeURIComponent(s)}?period=${encodeURIComponent(q.period)}&interval=${encodeURIComponent(q.interval)}`;
+            const r = await fetch(url);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const j = await r.json();
+            setParams(prev => ({ ...prev, [s]: q }));
+            setHistory(h => ({ ...h, [s]: j }));
+            historyCacheRef.current[s] = historyCacheRef.current[s] || {};
+            historyCacheRef.current[s][key] = { data: j, ts: Date.now() };
+            setTimeout(() => { renderPriceChart(s, j); renderIndicatorChart(s, j); }, 0);
+            // reset backoff on success
+            const b = backoffRef.current[s];
+            if (b) { b.ms = 10000; if (b.timer) { clearTimeout(b.timer); b.timer = null; } }
+            return true;
+          } catch (e) {
+            console.error('history error', e);
+            scheduleBackoff(s);
+            return false;
+          } finally {
+            inflightRef.current[s] = false;
+          }
+        };
+
+        const scheduleBackoff = (s) => {
+          const current = backoffRef.current[s] || { ms: 10000, timer: null };
+          if (current.timer) return; // already scheduled
+          const ms = current.ms;
+          current.timer = setTimeout(() => {
+            current.timer = null;
+            fetchHistory(s, {}, { nocache: true });
+          }, ms);
+          current.ms = Math.min(ms * 2, 5 * 60 * 1000);
+          backoffRef.current[s] = current;
+        };
+
+        const chartCommonOpts = {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color:'#e5e7eb' } },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtNum(ctx.parsed.y)}` } },
+            zoom: {
+              zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+              pan: { enabled: true, mode: 'x' },
+            },
+          },
+          scales: {
+            x: { type: 'time', time: { unit: 'day' }, ticks: { color:'#9ca3af' }, grid: { color:'#1f2937' } },
+            y: { ticks: { color:'#9ca3af' }, grid: { color:'#1f2937' } },
+          },
+        };
+
+        // RSI band shading plugin
+        const rsiBandPlugin = {
+          id: 'rsiBandPlugin',
+          beforeDatasetsDraw(chart) {
+            const { ctx, chartArea, scales } = chart;
+            if (!chartArea) return;
+            const xLeft = chartArea.left;
+            const width = chartArea.right - chartArea.left;
+            const y = scales.y;
+            const y0 = y.getPixelForValue(0);
+            const y30 = y.getPixelForValue(30);
+            const y70 = y.getPixelForValue(70);
+            const y100 = y.getPixelForValue(100);
+            const rect = (ya, yb) => ({ top: Math.min(ya, yb), h: Math.abs(ya - yb) });
+            // Overbought (70-100) red tint
+            const r1 = rect(y70, y100);
+            ctx.save();
+            ctx.fillStyle = 'rgba(239,68,68,0.08)';
+            ctx.fillRect(xLeft, r1.top, width, r1.h);
+            // Oversold (0-30) green tint
+            const r2 = rect(y0, y30);
+            ctx.fillStyle = 'rgba(34,197,94,0.08)';
+            ctx.fillRect(xLeft, r2.top, width, r2.h);
+            ctx.restore();
+          },
+        };
+
+        const attachDblClickReset = (canvas, s, chartKey) => {
+          if (!canvas) return;
+          const handler = () => {
+            const ch = chartsRef.current[s]?.[chartKey];
+            if (ch?.resetZoom) ch.resetZoom();
+          };
+          // remove then add to avoid duplicate
+          canvas.removeEventListener('dblclick', handler);
+          canvas.addEventListener('dblclick', handler);
+        };
+
+        const renderPriceChart = (s, data) => {
+          try {
+            const el = document.getElementById(`chart-price-${s}`);
+            if (!el) return;
+            // Destroy old
+            const old = chartsRef.current[s]?.price;
+            if (old) old.destroy();
+            const ctx = el.getContext('2d');
+            const ts = data.ts || [];
+            const close = data.close || [];
+            const sma20 = (data.indicators && data.indicators.sma20) || [];
+            const sma50 = (data.indicators && data.indicators.sma50) || [];
+            const bb = (data.indicators && data.indicators.bbands) || {};
+            const upper = bb.upper || [];
+            const lower = bb.lower || [];
+            const middle = bb.middle || [];
+
+            const cfg = {
+              type: 'line',
+              data: {
+                labels: ts,
+                datasets: [
+                  { label:'Close', data: close, borderColor:'#3b82f6', backgroundColor:'transparent', pointRadius:0, borderWidth:1.6 },
+                  { label:'SMA20', data: sma20, borderColor:'#f59e0b', backgroundColor:'transparent', pointRadius:0, borderWidth:1.2 },
+                  { label:'SMA50', data: sma50, borderColor:'#f97316', backgroundColor:'transparent', pointRadius:0, borderWidth:1.2 },
+                  { label:'BB Upper', data: upper, borderColor:'#9ca3af', backgroundColor:'transparent', pointRadius:0, borderWidth:1, borderDash:[4,3] },
+                  { label:'BB Middle', data: middle, borderColor:'#6b7280', backgroundColor:'transparent', pointRadius:0, borderWidth:0.8, borderDash:[3,3] },
+                  { label:'BB Lower', data: lower, borderColor:'#9ca3af', backgroundColor:'transparent', pointRadius:0, borderWidth:1, borderDash:[4,3] },
+                ],
+              },
+              options: chartCommonOpts,
+            };
+            chartsRef.current[s] = chartsRef.current[s] || {};
+            chartsRef.current[s].price = new Chart(ctx, cfg);
+            attachDblClickReset(el, s, 'price');
+          } catch (e) { console.error('price chart render error', e); }
+        };
+
+        const renderIndicatorChart = (s, data) => {
+          try {
+            const el = document.getElementById(`chart-ind-${s}`);
+            if (!el) return;
+            // Destroy old
+            const old = chartsRef.current[s]?.indicator;
+            if (old) old.destroy();
+            const ctx = el.getContext('2d');
+            const ts = data.ts || [];
+            const rsi = (data.indicators && data.indicators.rsi14) || [];
+            const macd = (data.indicators && data.indicators.macd) || {};
+            const macdLine = macd.macd || [];
+            const signal = macd.signal || [];
+            const hist = macd.hist || [];
+            const rsi30 = Array(ts.length).fill(30);
+            const rsi70 = Array(ts.length).fill(70);
+
+            const cfg = {
+              type: 'line',
+              data: {
+                labels: ts,
+                datasets: [
+                  { label:'RSI14', data: rsi, borderColor:'#22c55e', backgroundColor:'transparent', pointRadius:0, borderWidth:1.2 },
+                  { label:'RSI 70', data: rsi70, borderColor:'#ef4444', backgroundColor:'transparent', pointRadius:0, borderWidth:0.8, borderDash:[4,3] },
+                  { label:'RSI 30', data: rsi30, borderColor:'#22c55e', backgroundColor:'transparent', pointRadius:0, borderWidth:0.8, borderDash:[4,3] },
+                  { label:'MACD', data: macdLine, borderColor:'#eab308', backgroundColor:'transparent', pointRadius:0, borderWidth:1.2 },
+                  { label:'Signal', data: signal, borderColor:'#facc15', backgroundColor:'transparent', pointRadius:0, borderWidth:1.0 },
+                  {
+                    label:'Hist',
+                    data: hist,
+                    type:'bar',
+                    backgroundColor: (ctx) => {
+                      const v = ctx.parsed?.y ?? 0;
+                      return v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)';
+                    },
+                    borderWidth: 0,
+                  },
+                ],
+              },
+              options: {
+                ...chartCommonOpts,
+                scales: {
+                  x: chartCommonOpts.scales.x,
+                  y: { ...chartCommonOpts.scales.y, suggestedMin: -100, suggestedMax: 100 },
+                },
+              },
+              plugins: [rsiBandPlugin],
+            };
+            chartsRef.current[s] = chartsRef.current[s] || {};
+            chartsRef.current[s].indicator = new Chart(ctx, cfg);
+            attachDblClickReset(el, s, 'indicator');
+          } catch (e) { console.error('indicator chart render error', e); }
+        };
+
+        const toggleDetails = (s) => {
+          const ex = new Set(expanded);
+          if (ex.has(s)) {
+            ex.delete(s);
+            // stop auto refresh & backoff
+            const tm = timersRef.current[s];
+            if (tm?.intervalId) { clearInterval(tm.intervalId); }
+            if (tm?.backoffTimer) { clearTimeout(tm.backoffTimer); }
+            delete timersRef.current[s];
+            const b = backoffRef.current[s];
+            if (b?.timer) clearTimeout(b.timer);
+            delete backoffRef.current[s];
+          } else {
+            ex.add(s);
+            // fetch & render (cache-aware)
+            fetchHistory(s);
+            // start auto refresh every 60s, backoff managed separately
+            const intervalId = setInterval(() => fetchHistory(s), 60000);
+            timersRef.current[s] = { intervalId, backoffTimer: null };
+            backoffRef.current[s] = { ms: 10000, timer: null };
+          }
+          setExpanded(ex);
+        };
+
+        const onParamChange = (s, next) => {
+          setParams(prev => ({ ...prev, [s]: { ...(prev[s] || { period:'3y', interval:'1d' }), ...next } }));
+          // refetch with overrides
+          fetchHistory(s, next);
+        };
+
+        const resetZoomAll = (s) => {
+          const ch = chartsRef.current[s] || {};
+          if (ch.price?.resetZoom) ch.price.resetZoom();
+          if (ch.indicator?.resetZoom) ch.indicator.resetZoom();
+        };
+
+        const fetchCompany = async (s) => {
+          try {
+            const r = await fetch(`${API_BASE}/api/company/${encodeURIComponent(s)}`);
+            const j = await r.json();
+            setCompanyData(prev => ({ ...prev, [s]: j }));
+          } catch (e) { console.error('company error', e); }
+        };
+
+        const toggleInfo = async (s) => {
+          const ex = new Set(infoExpanded);
+          if (ex.has(s)) { ex.delete(s); setInfoExpanded(ex); return; }
+          ex.add(s); setInfoExpanded(ex);
+          await fetchCompany(s);
+        };
+
+        // Tabs: loaders and toggles
+        const loadHot = async () => {
+          try {
+            const r = await fetch(`${API_BASE}/api/hot`);
+            const j = await r.json();
+            setHot(j.results || []);
+          } catch (e) { console.error('hot error', e); }
+        };
+        const loadIndices = async () => {
+          try {
+            const r = await fetch(`${API_BASE}/api/indices?category=${encodeURIComponent(idxCat)}`);
+            const j = await r.json();
+            setIndices(j.indices || []);
+          } catch (e) { console.error('indices error', e); }
+        };
+        const switchTab = (t) => {
+          setTab(t);
+          if (t === 'hot') loadHot();
+          if (t === 'indices') loadIndices();
+        };
+        useEffect(() => {
+          if (tab === 'indices') loadIndices();
+        }, [idxCat, tab]);
+        const toggleIdxExpand = async (idxSym, constituents) => {
+          const ex = new Set(idxExpanded);
+          if (ex.has(idxSym)) {
+            ex.delete(idxSym);
+            setIdxExpanded(ex);
+            return;
+          }
+          ex.add(idxSym);
+          setIdxExpanded(ex);
+          try {
+            const qs = constituents.join(',');
+            const r = await fetch(`${API_BASE}/api/prices?symbols=${encodeURIComponent(qs)}`);
+            const j = await r.json();
+            const map = {};
+            for (const item of (j.results || [])) map[item.symbol] = item;
+            setIdxConPrices(prev => ({ ...prev, [idxSym]: map }));
+          } catch (e) { console.error('constituents prices error', e); }
+        };
+
+        // 投资组合：添加/移除持仓、价格获取、饼图渲染
+        const addHolding = async () => {
+          const sym = (pfSymbol || '').trim().toUpperCase();
+          const qty = parseFloat(pfQty);
+          if (!sym || !isFinite(qty) || qty <= 0) return;
+          setPortfolio(prev => {
+            const existing = prev.find(x => x.symbol === sym);
+            if (existing) {
+              return prev.map(x => x.symbol === sym ? { ...x, quantity: x.quantity + qty } : x);
+            }
+            return [...prev, { symbol: sym, quantity: qty }];
+          });
+          setPfSymbol('');
+          setPfQty('');
+          await updatePortfolioPrices([sym]);
+        };
+
+        const removeHolding = (sym) => {
+          setPortfolio(prev => prev.filter(x => x.symbol !== sym));
+          if (pfChartRef.current) { pfChartRef.current.destroy(); pfChartRef.current = null; }
+        };
+
+        const updatePortfolioPrices = async (symbols = []) => {
+          try {
+            const syms = symbols.length ? symbols : [...new Set(portfolio.map(x => x.symbol))];
+            if (syms.length === 0) return;
+            const qs = syms.join(',');
+            const r = await fetch(`${API_BASE}/api/prices?symbols=${encodeURIComponent(qs)}`);
+            const j = await r.json();
+            const map = {};
+            for (const item of (j.results || [])) map[item.symbol] = item;
+            setPortfolioPrices(prev => ({ ...prev, ...map }));
+          } catch (e) { console.error('portfolio prices error', e); }
+        };
+
+        const renderPortfolioChart = () => {
+          try {
+            const el = document.getElementById('chart-portfolio');
+            if (!el) return;
+            const old = pfChartRef.current;
+            if (old) old.destroy();
+            const ctx = el.getContext('2d');
+            const labels = portfolio.map(x => x.symbol);
+            const dataVals = portfolio.map(x => {
+              const priceObj = prices[x.symbol] || portfolioPrices[x.symbol] || {};
+              const price = priceObj.price;
+              const v = price ? price * x.quantity : 0;
+              return v;
+            });
+            const colors = ['#3b82f6','#ef4444','#22c55e','#eab308','#f97316','#8b5cf6','#14b8a6','#f43f5e','#10b981','#6366f1'];
+            const bg = labels.map((_, i) => colors[i % colors.length]);
+            const total = dataVals.reduce((a,b)=>a+b,0) || 1;
+            const cfg = {
+              type: 'pie',
+              data: {
+                labels,
+                datasets: [{ data: dataVals, backgroundColor: bg, borderColor:'#1f2937', borderWidth:1 }],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { labels: { color:'#e5e7eb' } },
+                  tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtNum(ctx.parsed)} (${fmtPct(100*ctx.parsed/total)})` } },
+                },
+              },
+            };
+            pfChartRef.current = new Chart(ctx, cfg);
+          } catch (e) { console.error('portfolio chart render error', e); }
+        };
+
+        useEffect(() => { renderPortfolioChart(); }, [portfolio, portfolioPrices, prices]);
+
+        return (
+          <div className="container">
+            <h1>盯盘面板（含图表）</h1>
+
+            <div className="card tabs">
+              <button className={`tab ${tab==='watchlist'?'active':''}`} onClick={()=>switchTab('watchlist')}>关注列表</button>
+              <button className={`tab ${tab==='hot'?'active':''}`} onClick={()=>switchTab('hot')}>热门股票</button>
+              <button className={`tab ${tab==='indices'?'active':''}`} onClick={()=>switchTab('indices')}>板块指数</button>
+              <button className={`tab ${tab==='portfolio'?'active':''}`} onClick={()=>switchTab('portfolio')}>投资组合</button>
+            </div>
+
+            {tab === 'watchlist' && (
+              <>
+                <div className="card">
+                  <div className="row">
+                    <input value={input} onChange={(e)=>setInput(e.target.value)} placeholder="输入代码，如 AAPL" />
+                    <button onClick={addSymbol}>添加关注</button>
+                    <button onClick={loadPrices}>立即刷新</button>
+                    <span className="muted tiny">每 15 秒自动刷新</span>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>代码</th>
+                        <th>价格</th>
+                        <th>涨跌%</th>
+                        <th>SMA20</th>
+                        <th>RSI14</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {symbols.map((s) => {
+                        const p = prices[s] || {};
+                        const chgPct = p.change_percent;
+                        const cls = chgPct > 0 ? 'pos' : chgPct < 0 ? 'neg' : '';
+                        const pms = params[s] || { period:'3y', interval:'1d' };
+                        return (
+                          <React.Fragment key={s}>
+                            <tr>
+                              <td className="symbol">{s}</td>
+                              <td>{fmtNum(p.price)}</td>
+                              <td className={cls}>{fmtPct(chgPct)}</td>
+                              <td>{fmtNum(p?.indicators?.sma20)}</td>
+                              <td>{fmtNum(p?.indicators?.rsi14)}</td>
+                              <td>
+                                <div className="actions">
+                                  <button onClick={()=>toggleDetails(s)}>{expanded.has(s) ? '收起' : '详情'}</button>
+                                  <button onClick={()=>toggleInfo(s)}>{infoExpanded.has(s) ? '收起信息' : '公司信息'}</button>
+                                  <button onClick={()=>removeSymbol(s)}>移除</button>
+                                </div>
+                              </td>
+                            </tr>
+                            {expanded.has(s) && (
+                              <tr>
+                                <td colSpan="6">
+                                  <div className="details">
+                                    <div className="controls">
+                                      <span className="tiny muted">区间:</span>
+                                      <select value={pms.period} onChange={(e)=>onParamChange(s, { period: e.target.value })}>
+                                        <option value="1y">1y</option>
+                                        <option value="2y">2y</option>
+                                        <option value="3y">3y</option>
+                                        <option value="5y">5y</option>
+                                      </select>
+                                      <span className="tiny muted">周期:</span>
+                                      <select value={pms.interval} onChange={(e)=>onParamChange(s, { interval: e.target.value })}>
+                                        <option value="1d">1d</option>
+                                        <option value="1h">1h</option>
+                                        <option value="5m">5m</option>
+                                      </select>
+                                      <button onClick={()=>fetchHistory(s)} style={{ marginLeft: 8 }}>刷新历史</button>
+                                      <button onClick={()=>resetZoomAll(s)} style={{ marginLeft: 4 }}>重置缩放</button>
+                                      <span className="tiny muted">详情每 60 秒自动刷新；双击图表重置缩放</span>
+                                    </div>
+                                    <div className="metric">
+                                      <div>
+                                        <div className="tiny muted">开盘</div>
+                                        <div>{fmtNum(p.open)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">最高</div>
+                                        <div>{fmtNum(p.high)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">最低</div>
+                                        <div>{fmtNum(p.low)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">昨收</div>
+                                        <div>{fmtNum(p.prev_close)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">成交量</div>
+                                        <div>{fmtNum(p.volume, 0)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">市值</div>
+                                        <div>{fmtNum(p.market_cap, 0)}</div>
+                                      </div>
+                                    </div>
+                                    <div style={{ marginTop: 10 }} className="tiny muted">价格 / SMA20 / SMA50 / 布林带</div>
+                                    <div className="chart-wrap">
+                                      <canvas id={`chart-price-${s}`}></canvas>
+                                    </div>
+                                    <div style={{ marginTop: 10 }} className="tiny muted">RSI14（含 30/70 阈值与带区着色）/ MACD（线）/ Hist（按正负着色）</div>
+                                    <div className="chart-wrap small">
+                                      <canvas id={`chart-ind-${s}`}></canvas>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            {infoExpanded.has(s) && (
+                              <tr>
+                                <td colSpan="6">
+                                  <div className="details">
+                                    <div className="tiny muted">公司信息</div>
+                                    <div className="metric" style={{ marginTop: 6 }}>
+                                      <div>
+                                        <div className="tiny muted">名称</div>
+                                        <div>{companyData[s]?.info?.name || '-'}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">行业</div>
+                                        <div>{companyData[s]?.info?.industry || '-'}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">板块</div>
+                                        <div>{companyData[s]?.info?.sector || '-'}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">市值</div>
+                                        <div>{fmtNum(companyData[s]?.info?.market_cap, 0)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">员工数</div>
+                                        <div>{fmtNum(companyData[s]?.info?.employees, 0)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="tiny muted">官网</div>
+                                        <div>{companyData[s]?.info?.website ? <a href={companyData[s].info.website} target="_blank" rel="noopener noreferrer">{companyData[s].info.website}</a> : '-'}</div>
+                                      </div>
+                                    </div>
+                                    <div style={{ marginTop: 8 }}>
+                                      <div className="tiny muted">公司概况</div>
+                                      <div className="tiny" style={{ marginTop:4 }}>{companyData[s]?.info?.summary || '—'}</div>
+                                    </div>
+                                    <div style={{ marginTop: 10 }}>
+                                      <div className="tiny muted">基本面指标</div>
+                                      <div className="metric" style={{ marginTop: 6 }}>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('pe')}>PE(TTM)</div>
+                                          <div>{fmtNum(companyData[s]?.fundamentals?.pe)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('forward_pe')}>Forward PE</div>
+                                          <div>{fmtNum(companyData[s]?.fundamentals?.forward_pe)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('ps')}>PS(TTM)</div>
+                                          <div>{fmtNum(companyData[s]?.fundamentals?.ps)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('pb')}>PB</div>
+                                          <div>{fmtNum(companyData[s]?.fundamentals?.pb)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('peg')}>PEG</div>
+                                          <div>{fmtNum(companyData[s]?.fundamentals?.peg)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('beta')}>Beta</div>
+                                          <div>{fmtNum(companyData[s]?.fundamentals?.beta)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('dividend_yield')}>股息率</div>
+                                          <div>{fmtNum((companyData[s]?.fundamentals?.dividend_yield||0)*100)}%</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('payout_ratio')}>分红率</div>
+                                          <div>{fmtNum((companyData[s]?.fundamentals?.payout_ratio||0)*100)}%</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('gross_margins')}>毛利率</div>
+                                          <div>{fmtNum((companyData[s]?.fundamentals?.gross_margins||0)*100)}%</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('operating_margins')}>营业利润率</div>
+                                          <div>{fmtNum((companyData[s]?.fundamentals?.operating_margins||0)*100)}%</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('profit_margins')}>净利率</div>
+                                          <div>{fmtNum((companyData[s]?.fundamentals?.profit_margins||0)*100)}%</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('roe')}>ROE</div>
+                                          <div>{fmtNum((companyData[s]?.fundamentals?.roe||0)*100)}%</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('roa')}>ROA</div>
+                                          <div>{fmtNum((companyData[s]?.fundamentals?.roa||0)*100)}%</div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div style={{ marginTop: 10 }}>
+                                      <div className="tiny muted">财务快照（最近一期）</div>
+                                      <div className="metric" style={{ marginTop: 6 }}>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('revenue')}>收入</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.annual?.revenue, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('gross_profit')}>毛利润</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.annual?.gross_profit, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('operating_income')}>营业利润</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.annual?.operating_income, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('net_income')}>净利润</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.annual?.net_income, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('assets')}>资产</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.balance_sheet?.assets, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('liabilities')}>负债</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.balance_sheet?.liabilities, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('equity')}>股东权益</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.balance_sheet?.equity, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('operating_cash_flow')}>经营现金流</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.cashflow?.operating_cash_flow, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('capital_expenditures')}>资本开支</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.cashflow?.capital_expenditures, 0)}</div>
+                                        </div>
+                                        <div>
+                                          <div className="tiny muted help-link" onClick={()=>openHelp('free_cash_flow')}>自由现金流</div>
+                                          <div>{fmtNum(companyData[s]?.financials?.cashflow?.free_cash_flow, 0)}</div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {/* 新闻功能已移除 */}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                              </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {tab === 'portfolio' && (
+              <>
+                <div className="card">
+                  <div className="row">
+                    <input value={pfSymbol} onChange={(e)=>setPfSymbol(e.target.value)} placeholder="股票代码，如 AAPL" />
+                    <input value={pfQty} onChange={(e)=>setPfQty(e.target.value)} placeholder="持有数量，如 10" />
+                    <button onClick={addHolding}>添加到组合</button>
+                    <button onClick={()=>updatePortfolioPrices()}>刷新价格</button>
+                    <span className="muted tiny">根据价格与数量生成饼图</span>
+                  </div>
+                </div>
+
+                <div className="card">
+                  <div className="row" style={{ justifyContent:'space-between' }}>
+                    <div style={{ flex:'1 1 420px' }}>
+                      <div className="tiny muted">持仓明细</div>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>代码</th>
+                            <th>数量</th>
+                            <th>价格</th>
+                            <th>市值</th>
+                            <th>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {portfolio.length === 0 && (
+                            <tr><td colSpan="5" className="muted tiny">暂无持仓，先在上方添加</td></tr>
+                          )}
+                          {portfolio.map((h)=> {
+                            const priceObj = prices[h.symbol] || portfolioPrices[h.symbol] || {};
+                            const price = priceObj.price;
+                            const val = price ? price * h.quantity : 0;
+                            return (
+                              <tr key={h.symbol}>
+                                <td className="symbol">{h.symbol}</td>
+                                <td>{fmtNum(h.quantity, 0)}</td>
+                                <td>{price ? fmtNum(price) : '-'}</td>
+                                <td>{fmtNum(val)}</td>
+                                <td><button onClick={()=>removeHolding(h.symbol)}>移除</button></td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="chart-wrap" style={{ minWidth: 260, flex:'1 1 260px', height: 260 }}>
+                      <canvas id="chart-portfolio"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {tab === 'hot' && (
+              <div className="card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>价格</th>
+                      <th>涨跌%</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hot.map((p) => {
+                      const chgPct = p.change_percent;
+                      const cls = chgPct > 0 ? 'pos' : chgPct < 0 ? 'neg' : '';
+                      return (
+                        <tr key={p.symbol}>
+                          <td className="symbol">{p.symbol}</td>
+                          <td>{fmtNum(p.price)}</td>
+                          <td className={cls}>{fmtPct(chgPct)}</td>
+                          <td><button onClick={()=>addSymbolDirect(p.symbol)}>加入关注</button></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {tab === 'indices' && (
+              <div className="card">
+                <div style={{ marginBottom: 8 }}>
+                  <span className="tiny muted" style={{ marginRight: 8 }}>类别</span>
+                  <button className={`tab ${idxCat==='global'?'active':''}`} onClick={()=>setIdxCat('global')}>全球热门指数</button>
+                  <button className={`tab ${idxCat==='sector_etf'?'active':''}`} onClick={()=>setIdxCat('sector_etf')}>板块ETF</button>
+                </div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>代码</th>
+                      <th>名称</th>
+                      <th>价格</th>
+                      <th>涨跌%</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {indices.map((idx) => {
+                      const chgPct = idx.change_percent;
+                      const cls = chgPct > 0 ? 'pos' : chgPct < 0 ? 'neg' : '';
+                      const expanded = idxExpanded.has(idx.symbol);
+                      const hasCons = Array.isArray(idx.constituents) && idx.constituents.length > 0;
+                      return (
+                        <React.Fragment key={idx.symbol}>
+                          <tr>
+                            <td className="symbol">{idx.symbol}</td>
+                            <td>{idx.name}</td>
+                            <td>{fmtNum(idx.price)}</td>
+                            <td className={cls}>{fmtPct(chgPct)}</td>
+                            <td>
+                              {hasCons ? (
+                                <button onClick={()=>toggleIdxExpand(idx.symbol, idx.constituents)}>{expanded ? '收起成分股' : '成分股'}</button>
+                              ) : (
+                                <span className="tiny muted">—</span>
+                              )}
+                            </td>
+                          </tr>
+                          {expanded && hasCons && (
+                            <tr>
+                              <td colSpan="5">
+                                <div className="details">
+                                  <div className="tiny muted">构成股票</div>
+                                  <table style={{ width:'100%', marginTop:8 }}>
+                                    <thead>
+                                      <tr>
+                                        <th>代码</th>
+                                        <th>价格</th>
+                                        <th>涨跌%</th>
+                                        <th>操作</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {idx.constituents.map((sym) => {
+                                        const cp = (idxConPrices[idx.symbol] || {})[sym] || {};
+                                        const pct = cp.change_percent;
+                                        const ccls = pct > 0 ? 'pos' : pct < 0 ? 'neg' : '';
+                                        return (
+                                          <tr key={sym}>
+                                            <td className="symbol">{sym}</td>
+                                            <td>{fmtNum(cp.price)}</td>
+                                            <td className={ccls}>{fmtPct(pct)}</td>
+                                            <td><button onClick={()=>addSymbolDirect(sym)}>加入关注</button></td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {showHelp && (
+              <div className="modal-backdrop" onClick={closeHelp}>
+                <div className="modal-content" onClick={(e)=>e.stopPropagation()}>
+                  <h3>{HELP_MAP[helpKey]?.title || '指标说明'}</h3>
+                  <div className="tiny" style={{ marginTop:6 }}>{HELP_MAP[helpKey]?.def || '暂无该指标的说明。'}</div>
+                  <div className="tiny muted" style={{ marginTop:8 }}>{HELP_MAP[helpKey]?.meaning || ''}</div>
+                  <div className="modal-actions">
+                    <button onClick={closeHelp}>我知道了</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+  </body>
+</html>
