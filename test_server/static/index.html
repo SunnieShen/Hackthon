@@ -6,39 +6,75 @@
     <title>盯盘面板（含图表）</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-css-reset/dist/reset.min.css" />
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#0b1220; color:#e5e7eb; }
+      :root {
+        --bg: #0f172a;      /* slate-900 */
+        --bg-2: #0b1220;    /* darker variant */
+        --card: #111827;    /* gray-800 */
+        --border: #334155;  /* slate-700 */
+        --text: #e5e7eb;    /* gray-200 */
+        --muted: #94a3b8;   /* slate-400 */
+        --accent: #60a5fa;  /* blue-400 */
+        --pos: #22c55e;     /* green-500 */
+        --neg: #ef4444;     /* red-500 */
+        --shadow: rgba(0,0,0,0.35);
+      }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
       .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
       h1 { font-size: 20px; margin-bottom: 12px; }
-      .card { background:#111827; border:1px solid #1f2937; border-radius:10px; padding: 14px; margin-bottom: 16px; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 16px;
+        box-shadow: 0 4px 12px var(--shadow);
+      }
       .row { display:flex; gap:12px; align-items:center; flex-wrap: wrap; }
-      input, select, button { height: 32px; border-radius: 8px; border:1px solid #374151; background:#0b1220; color:#e5e7eb; padding: 0 10px; }
-      button { background:#1f2937; cursor:pointer; }
-      button:hover { background:#374151; }
+      input, select {
+        height: 34px; border-radius: 10px; border:1px solid var(--border); background: var(--bg-2); color:var(--text); padding: 0 12px;
+        transition: border-color .2s ease, box-shadow .2s ease;
+      }
+      input:focus, select:focus { outline: none; border-color:#475569; box-shadow: 0 0 0 2px rgba(96,165,250,0.2); }
+      /* Buttons: no border by default; show subtle box on hover */
+      button {
+        height: 34px; border-radius: 10px; border: none; padding: 0 14px; cursor:pointer; color:var(--text);
+        background: transparent;
+        transition: border-color .15s ease, background-color .15s ease;
+      }
+      button:hover { background-color: #111827; border: 1px solid var(--border); }
+      button:active { background-color: #0f172a; }
+      button:disabled { opacity:.6; cursor:not-allowed; }
+      button.danger { color: var(--neg); }
       table { width:100%; border-collapse: collapse; font-size: 14px; }
-      th, td { border-bottom:1px solid #1f2937; padding: 10px; text-align: left; }
-      th { color:#9ca3af; font-weight: 600; }
+      th, td { border-bottom:1px solid var(--border); padding: 10px; text-align: left; }
+      th { color:var(--muted); font-weight: 600; }
       tr:hover td { background: #0f172a; }
-      .pos { color:#10b981; }
-      .neg { color:#ef4444; }
-      .symbol { font-weight: 600; }
-      .details { background:#0b1220; border:1px dashed #1f2937; margin-top:8px; border-radius:8px; padding: 12px; }
-      .metric { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-      .metric div { background:#0b1220; border:1px solid #1f2937; border-radius:8px; padding:8px; }
+      .pos { color:var(--pos); font-weight: 600; }
+      .neg { color:var(--neg); font-weight: 600; }
+      .symbol { font-weight: 700; letter-spacing: .2px; }
+      .details { background: var(--bg-2); border:1px dashed var(--border); margin-top:8px; border-radius:10px; padding: 12px; }
+      .metric { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .metric div { background: var(--bg-2); border:1px solid var(--border); border-radius:10px; padding:10px; box-shadow: 0 2px 6px var(--shadow); }
       .chart-wrap { position: relative; height: 260px; }
       .chart-wrap.small { height: 180px; }
-      .muted { color:#9ca3af; }
+      .muted { color:var(--muted); }
       .tiny { font-size: 12px; }
       .actions { display:flex; gap:6px; }
       .controls { display:flex; gap:8px; align-items:center; margin: 8px 0; }
       /* tabs */
       .tabs { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
-      .tab { background:#1f2937; border:1px solid #374151; border-radius:8px; height:32px; padding:0 12px; cursor:pointer; }
-      .tab.active { background:#374151; border-color:#4b5563; }
-      .help-link { cursor: pointer; text-decoration: underline; color:#9ca3af; }
-      .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:50; }
-      .modal-content { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:16px; max-width:640px; width:92%; color:#e5e7eb; }
+      .tab { background: transparent; border:none; border-radius:999px; height:32px; padding:0 14px; cursor:pointer; color:var(--text); }
+      .tab:hover { background-color: #111827; }
+      .tab.active { background-color: #1f2937; }
+      .help-link { cursor: pointer; text-decoration: underline; color:var(--muted); }
+      .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:50; }
+      .modal-content { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; max-width:640px; width:92%; color:var(--text); box-shadow: 0 4px 12px var(--shadow); }
       .modal-content h3 { margin:0 0 8px 0; font-size:16px; }
-      .modal-content .muted { color:#9ca3af; }
+      .modal-content .muted { color:var(--muted); }
       .modal-actions { display:flex; justify-content:flex-end; margin-top:12px; }
       .modal-actions button { height:28px; }
      </style>
@@ -50,6 +86,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
+    <!-- Chart.js plugins: Treemap & Sankey (for advanced visuals) -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.12.0"></script>
   </head>
   <body>
     <div id="root"></div>
@@ -69,6 +108,12 @@
         const v = Number(n);
         return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
       }
+
+      // Chart.js 全局默认颜色适配深色主题
+      try {
+        Chart.defaults.color = '#e5e7eb';
+        Chart.defaults.borderColor = '#334155';
+      } catch (e) { /* ignore if Chart not loaded */ }
 
       // 指标帮助内容映射（简要定义与意义）
       const HELP_MAP = {
@@ -128,7 +173,46 @@
           const [pfSymbol, setPfSymbol] = useState('');
           const [pfQty, setPfQty] = useState('');
           const [portfolioPrices, setPortfolioPrices] = useState({});
+          const [pfAnalysis, setPfAnalysis] = useState(null);
           const pfChartRef = useRef(null);
+          // Dashboard chart refs
+          const pfTreemapRef = useRef(null);
+          const pfRadarRef = useRef(null);
+          const pfStackedRef = useRef(null);
+          const [pfAiLoading, setPfAiLoading] = useState(false);
+          // 提醒功能状态
+          const [alertThreshold, setAlertThreshold] = useState(3); // %
+          const [alertSound, setAlertSound] = useState(true);
+          const [alerts, setAlerts] = useState([]);
+          const alertedRef = useRef(new Set());
+          
+          // AI分析结果缓存
+          const [aiAnalyses, setAiAnalyses] = useState({});
+
+          const requestAiAnalysis = async (s) => {
+            try {
+              const p = prices[s] || {};
+              const payload = {
+                symbol: s,
+                financial_data: {
+                  currentPrice: p.price,
+                  changePercent: p.change_percent,
+                  peRatio: p?.fundamentals?.pe, // 可能没有，后端会处理 N/A
+                  rsi14: p?.indicators?.rsi14,
+                },
+              };
+              const r = await fetch(`${API_BASE}/api/ai_analysis`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+              const j = await r.json();
+              if (!r.ok) throw new Error(j?.error || 'AI分析请求失败');
+              setAiAnalyses(prev => ({ ...prev, [s]: j.analysis || '（无内容）' }));
+            } catch (e) {
+              setAiAnalyses(prev => ({ ...prev, [s]: `AI分析暂时不可用：${e.message || e}` }));
+            }
+          };
 
         // Load watchlist
         const loadWatchlist = async () => {
@@ -144,6 +228,29 @@
             const map = {};
             for (const item of (j.results || [])) map[item.symbol] = item;
             setPrices(map);
+            // 检查大幅波动并触发提醒
+            try {
+              const thr = Number(alertThreshold) || 0;
+              if (thr > 0) {
+                const newAlerts = [];
+                for (const s of (symbols || [])) {
+                  const chg = map[s]?.change_percent;
+                  if (chg !== undefined && chg !== null && Math.abs(chg) >= thr) {
+                    if (!alertedRef.current.has(s)) {
+                      alertedRef.current.add(s);
+                      newAlerts.push({ symbol: s, change_percent: chg, ts: Date.now() });
+                    }
+                  } else {
+                    // 波动恢复到阈值以内，允许未来再次提醒
+                    alertedRef.current.delete(s);
+                  }
+                }
+                if (newAlerts.length) {
+                  setAlerts(prev => [...newAlerts, ...prev].slice(0, 10));
+                  if (alertSound) beep();
+                }
+              }
+            } catch (e) { /* 忽略提醒计算错误 */ }
           } catch (e) { console.error('prices error', e); }
         };
         useEffect(() => {
@@ -509,6 +616,9 @@
         const removeHolding = (sym) => {
           setPortfolio(prev => prev.filter(x => x.symbol !== sym));
           if (pfChartRef.current) { pfChartRef.current.destroy(); pfChartRef.current = null; }
+          if (pfTreemapRef.current) { try { pfTreemapRef.current.destroy(); } catch(e){} pfTreemapRef.current = null; }
+          if (pfStackedRef.current) { try { pfStackedRef.current.destroy(); } catch(e){} pfStackedRef.current = null; }
+          // 雷达图依赖 pfAnalysis，会在依赖变化时刷新
         };
 
         const updatePortfolioPrices = async (symbols = []) => {
@@ -522,6 +632,38 @@
             for (const item of (j.results || [])) map[item.symbol] = item;
             setPortfolioPrices(prev => ({ ...prev, ...map }));
           } catch (e) { console.error('portfolio prices error', e); }
+        };
+
+        // 投资组合AI诊断：计算权重并请求后端
+        const requestPortfolioDiagnostic = async () => {
+          try {
+            setPfAiLoading(true);
+            setPfAnalysis(null);
+            const items = portfolio.map(h => {
+              const priceObj = prices[h.symbol] || portfolioPrices[h.symbol] || {};
+              const price = priceObj.price || 0;
+              const val = price * (h.quantity || 0);
+              return { symbol: h.symbol, value: isFinite(val) ? val : 0 };
+            });
+            const total = items.reduce((a,b)=>a + (b.value||0), 0);
+            const holdings = items.map(it => ({ symbol: it.symbol, weight: total > 0 ? (it.value/total) : (items.length ? 1/items.length : 0) }));
+            const r = await fetch(`${API_BASE}/api/portfolio/diagnostic`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ holdings })
+            });
+            const j = await r.json();
+            if (j && j.ok) {
+              setPfAnalysis({ analysis: j.analysis, summary_text: j.summary_text });
+            } else {
+              setPfAnalysis({ error: j && j.error ? j.error : 'diagnostic_failed' });
+            }
+          } catch (e) {
+            console.error('portfolio diagnostic error', e);
+            setPfAnalysis({ error: String(e) });
+          } finally {
+            setPfAiLoading(false);
+          }
         };
 
         const renderPortfolioChart = () => {
@@ -561,17 +703,217 @@
         };
 
         useEffect(() => { renderPortfolioChart(); }, [portfolio, portfolioPrices, prices]);
+        useEffect(() => { renderRadarChart(); }, [pfAnalysis]);
+
+        // 声音提醒：简单 beep
+        const beep = () => {
+          try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = 880;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
+            setTimeout(() => { osc.stop(); ctx.close(); }, 600);
+          } catch (e) { /* ignore */ }
+        };
+
+        // ======== 仪表板辅助与图表渲染 ========
+        const computeValueWeights = () => {
+          const items = portfolio.map(h => {
+            const priceObj = prices[h.symbol] || portfolioPrices[h.symbol] || {};
+            const price = priceObj.price || 0;
+            const val = price * (h.quantity || 0);
+            return { symbol: h.symbol, value: isFinite(val) ? val : 0 };
+          });
+          const total = items.reduce((a,b)=>a + (b.value||0), 0);
+          return items.map(it => ({ symbol: it.symbol, weight: total > 0 ? (it.value/total) : (items.length ? 1/items.length : 0) }));
+        };
+
+        const renderRadarChart = () => {
+          try {
+            const el = document.getElementById('chart-pf-radar');
+            if (!el || !pfAnalysis || pfAnalysis.error) return;
+            if (pfRadarRef.current) pfRadarRef.current.destroy();
+            const ctx = el.getContext('2d');
+            const labels = ['最大个股权重', '行业集中度', '估值暴露'];
+            const values = [
+              Math.min(1, (pfAnalysis.analysis?.metrics?.single_stock_weight || 0)),
+              Math.min(1, (pfAnalysis.analysis?.metrics?.sector_concentration || 0)),
+              Math.min(1, ((pfAnalysis.analysis?.metrics?.avg_pe || 0) / 50))
+            ];
+            pfRadarRef.current = new Chart(ctx, {
+              type: 'radar',
+              data: { labels, datasets: [{ label: '风险暴露', data: values, fill: true, backgroundColor: 'rgba(37,99,235,0.2)', borderColor: '#2563eb', pointBackgroundColor: '#2563eb' }] },
+              options: { responsive: true, scales: { r: { beginAtZero: true, max: 1 } }, plugins: { legend: { display: false } } }
+            });
+          } catch(e) { console.error('radar render error', e); }
+        };
+
+        const renderTreemapChart = () => {
+          try {
+            const el = document.getElementById('chart-pf-treemap');
+            if (!el) return;
+            if (pfTreemapRef.current) pfTreemapRef.current.destroy();
+            const ctx = el.getContext('2d');
+            const weights = computeValueWeights();
+            if (!weights.length) {
+              ctx.font = '12px sans-serif'; ctx.fillStyle = '#6b7280'; ctx.fillText('无持仓数据，无法生成树状图', 8, 18);
+              return;
+            }
+            const data = weights.map(w => ({ label: w.symbol, value: Math.max(0.0001, w.weight) }));
+            pfTreemapRef.current = new Chart(ctx, {
+              type: 'treemap',
+              data: {
+                datasets: [{
+                  tree: data,
+                  key: 'value',
+                  groups: ['label'],
+                  spacing: 0.5,
+                  borderColor: '#334155',
+                  borderWidth: 1,
+                  fontColor: '#e5e7eb',
+                  backgroundColor: (c) => {
+                    const v = c.raw ? c.raw.v : 0.2;
+                    const hue = 210 - Math.round(120 * v);
+                    return `hsl(${hue}, 70%, ${40 - Math.round(20 * v)}%)`;
+                  },
+                  labels: { display: true, formatter: (c) => `${c.g} ${(c.v*100).toFixed(1)}%` }
+                }]
+              },
+              options: { plugins: { legend: { display: false } } }
+            });
+          } catch(e) { console.error('treemap render error', e); }
+        };
+
+        const renderCorrelationHeatmap = async () => {
+          try {
+            const container = document.getElementById('pf-heatmap');
+            if (!container) return;
+            const syms = portfolio.map(p => p.symbol);
+            if (syms.length === 0) { container.innerHTML = '<span class="tiny muted">无持仓数据</span>'; return; }
+            const series = {};
+            for (const s of syms) {
+              try {
+                const r = await fetch(`${API_BASE}/api/history/${encodeURIComponent(s)}?period=3mo&interval=1d`);
+                const d = await r.json();
+                const closes = (d.prices || []).map(pt => ({ t: pt.date || pt.t || pt.timestamp, c: pt.close }))
+                  .filter(pt => pt.t != null && pt.c != null)
+                  .sort((a,b)=>a.t-b.t);
+                const rets = [];
+                for (let i=1;i<closes.length;i++) rets.push({ t: closes[i].t, r: Math.log(closes[i].c / closes[i-1].c) });
+                series[s] = rets;
+              } catch(e) { series[s] = []; }
+            }
+            const allTs = Array.from(new Set(Object.values(series).flat().map(x => x.t))).sort((a,b)=>a-b);
+            const corr = (a,b) => {
+              const xs = allTs.map(t => (a.find(x=>x.t===t)?.r ?? null));
+              const ys = allTs.map(t => (b.find(y=>y.t===t)?.r ?? null));
+              const pairs = []; for (let i=0;i<xs.length;i++){ if (xs[i]!=null && ys[i]!=null) pairs.push([xs[i],ys[i]]); }
+              if (pairs.length < 3) return 0;
+              const mx = pairs.reduce((s,p)=>s+p[0],0)/pairs.length; const my = pairs.reduce((s,p)=>s+p[1],0)/pairs.length;
+              let num=0,sx=0,sy=0; for (const [x,y] of pairs){ num+=(x-mx)*(y-my); sx+=(x-mx)**2; sy+=(y-my)**2; }
+              const den = Math.sqrt(sx*sy); if (!den || !isFinite(den)) return 0; return Math.max(-1, Math.min(1, num/den));
+            };
+            const N = syms.length; const mat = Array.from({length:N},()=>Array(N).fill(0));
+            for (let i=0;i<N;i++) for (let j=0;j<N;j++) mat[i][j] = i===j ? 1 : corr(series[syms[i]]||[], series[syms[j]]||[]);
+            const color = (v) => { const hue = 0 + (240)*((v+1)/2); return `hsl(${Math.round(hue)}, 80%, ${50 - 20*Math.abs(v)}%)`; };
+            let html = '<table class="table" style="min-width: 420px;">';
+            html += '<thead><tr><th></th>' + syms.map(s=>`<th>${s}</th>`).join('') + '</tr></thead><tbody>';
+            for (let i=0;i<N;i++) {
+              html += `<tr><th>${syms[i]}</th>`;
+              for (let j=0;j<N;j++) {
+                const v = mat[i][j]; const bg = color(v);
+                html += `<td style="background:${bg}; color:#e5e7eb;">${(v).toFixed(2)}</td>`;
+              }
+              html += '</tr>';
+            }
+            html += '</tbody></table>';
+            container.innerHTML = html;
+          } catch(e) { console.error('heatmap render error', e); }
+        };
+
+        const renderStackedArea = async () => {
+          try {
+            const el = document.getElementById('chart-pf-stacked');
+            if (!el) return;
+            if (pfStackedRef.current) pfStackedRef.current.destroy();
+            const ctx = el.getContext('2d');
+            if (portfolio.length === 0) { ctx.font='12px sans-serif'; ctx.fillStyle='#6b7280'; ctx.fillText('无持仓数据，无法生成趋势图', 8,18); return; }
+            const histories = {};
+            for (const p of portfolio) {
+              try {
+                const r = await fetch(`${API_BASE}/api/history/${encodeURIComponent(p.symbol)}?period=3mo&interval=1d`);
+                const d = await r.json();
+                const closes = (d.prices || []).map(pt => ({ t: pt.date || pt.t || pt.timestamp, c: pt.close }))
+                  .filter(pt => pt.t != null && pt.c != null)
+                  .sort((a,b)=>a.t-b.t);
+                histories[p.symbol] = closes;
+              } catch(e) { histories[p.symbol] = []; }
+            }
+            const allTs = Array.from(new Set(Object.values(histories).flat().map(x=>x.t))).sort((a,b)=>a-b);
+            const colors = ['#93c5fd','#86efac','#fca5a5','#fcd34d','#c4b5fd','#67e8f9','#f9a8d4','#a7f3d0'];
+            let colorIdx = 0; const datasets = []; const totals = allTs.map(()=>0);
+            for (const p of portfolio) {
+              const q = p.quantity || 0;
+              const data = allTs.map(t => { const pt = histories[p.symbol]?.find(x=>x.t===t); const val = pt? q * pt.c : 0; return { x: t*1000, y: val }; });
+              for (let i=0;i<data.length;i++) totals[i] += data[i].y;
+              const col = colors[colorIdx++ % colors.length];
+              datasets.push({ label: p.symbol, data, borderColor: col, backgroundColor: col + '33', fill: true, tension: 0.2, stack: 'contrib' });
+            }
+            for (const ds of datasets) ds.data = ds.data.map((pt,i)=>({ x: pt.x, y: totals[i] ? pt.y / totals[i] : 0 }));
+            pfStackedRef.current = new Chart(ctx, {
+              type: 'line',
+              data: { datasets },
+              options: { parsing:false, plugins:{ legend:{ position:'bottom' } }, scales:{ x:{ type:'time', time:{ unit:'week' } }, y:{ stacked:true, min:0, max:1 } } }
+            });
+          } catch(e) { console.error('stacked render error', e); }
+        };
+
+        const refreshPortfolioDashboard = async () => {
+          renderTreemapChart();
+          renderRadarChart();
+          await renderCorrelationHeatmap();
+          await renderStackedArea();
+        };
+
+        const dismissAlert = (idx) => {
+          setAlerts(prev => {
+            const it = prev[idx];
+            if (it?.symbol) alertedRef.current.delete(it.symbol);
+            return prev.filter((_, i) => i !== idx);
+          });
+        };
+
+        
 
         return (
           <div className="container">
-            <h1>盯盘面板（含图表）</h1>
+          <h1>盯盘面板（含图表）</h1>
 
-            <div className="card tabs">
-              <button className={`tab ${tab==='watchlist'?'active':''}`} onClick={()=>switchTab('watchlist')}>关注列表</button>
-              <button className={`tab ${tab==='hot'?'active':''}`} onClick={()=>switchTab('hot')}>热门股票</button>
-              <button className={`tab ${tab==='indices'?'active':''}`} onClick={()=>switchTab('indices')}>板块指数</button>
-              <button className={`tab ${tab==='portfolio'?'active':''}`} onClick={()=>switchTab('portfolio')}>投资组合</button>
-            </div>
+          <div className="card tabs">
+            <button className={`tab ${tab==='watchlist'?'active':''}`} onClick={()=>switchTab('watchlist')}>关注列表</button>
+            <button className={`tab ${tab==='hot'?'active':''}`} onClick={()=>switchTab('hot')}>热门股票</button>
+            <button className={`tab ${tab==='indices'?'active':''}`} onClick={()=>switchTab('indices')}>板块指数</button>
+            <button className={`tab ${tab==='portfolio'?'active':''}`} onClick={()=>switchTab('portfolio')}>投资组合</button>
+          </div>
+
+          {/* 提醒 Toast 列表 */}
+          <div style={{ position:'fixed', right:16, bottom:16, zIndex:50 }}>
+            {alerts.map((a, i) => (
+              <div key={i} className="card" style={{ padding:'8px 12px', minWidth:220 }}>
+                <div><span className="symbol">{a.symbol}</span> 波动提醒</div>
+                <div className={a.change_percent>0?'pos':a.change_percent<0?'neg':''}>{fmtPct(a.change_percent)}</div>
+                <div className="tiny muted">{new Date(a.ts).toLocaleTimeString()}</div>
+                <div style={{ marginTop:6 }}><button onClick={()=>dismissAlert(i)}>关闭</button></div>
+              </div>
+            ))}
+          </div>
 
             {tab === 'watchlist' && (
               <>
@@ -580,6 +922,10 @@
                     <input value={input} onChange={(e)=>setInput(e.target.value)} placeholder="输入代码，如 AAPL" />
                     <button onClick={addSymbol}>添加关注</button>
                     <button onClick={loadPrices}>立即刷新</button>
+                    <input value={alertThreshold} onChange={(e)=>setAlertThreshold(e.target.value)} placeholder="提醒阈值%, 如 3" style={{ width: 120, marginLeft: 8 }} />
+                    <label className="tiny muted" style={{ marginLeft: 8 }}>
+                      <input type="checkbox" checked={alertSound} onChange={(e)=>setAlertSound(e.target.checked)} style={{ marginRight: 6 }} />声音提醒
+                    </label>
                     <span className="muted tiny">每 15 秒自动刷新</span>
                   </div>
                 </div>
@@ -614,10 +960,21 @@
                                 <div className="actions">
                                   <button onClick={()=>toggleDetails(s)}>{expanded.has(s) ? '收起' : '详情'}</button>
                                   <button onClick={()=>toggleInfo(s)}>{infoExpanded.has(s) ? '收起信息' : '公司信息'}</button>
+                                  <button onClick={()=>requestAiAnalysis(s)}>AI分析</button>
                                   <button onClick={()=>removeSymbol(s)}>移除</button>
                                 </div>
                               </td>
                             </tr>
+                            {aiAnalyses[s] && (
+                              <tr>
+                                <td colSpan="6">
+                                  <div className="card" style={{ marginTop: 8 }}>
+                                    <div className="tiny muted">AI分析（来自后端服务）：</div>
+                                    <div style={{ whiteSpace:'pre-wrap' }}>{aiAnalyses[s]}</div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                             {expanded.has(s) && (
                               <tr>
                                 <td colSpan="6">
@@ -869,16 +1226,108 @@
                                 <td>{fmtNum(h.quantity, 0)}</td>
                                 <td>{price ? fmtNum(price) : '-'}</td>
                                 <td>{fmtNum(val)}</td>
-                                <td><button onClick={()=>removeHolding(h.symbol)}>移除</button></td>
+                                <td><button className="danger" onClick={()=>removeHolding(h.symbol)}>移除</button></td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
+                      <div style={{ marginTop: 10 }}>
+                        <button onClick={requestPortfolioDiagnostic} disabled={pfAiLoading || portfolio.length===0}>
+                          {pfAiLoading ? '诊断中…' : 'AI诊断'}
+                        </button>
+                        <span className="tiny muted" style={{ marginLeft: 10 }}>基于持仓市值分布进行组合体检</span>
+                      </div>
+                      {pfAnalysis && (
+                        <div style={{ marginTop: 10 }}>
+                          {pfAnalysis.error ? (
+                            <div className="tiny neg">诊断失败：{String(pfAnalysis.error)}</div>
+                          ) : (
+                            <div className="details">
+                              <div className="tiny muted">AI诊断结果</div>
+                              <div className="row" style={{ gap: 16 }}>
+                                <div>
+                                  <div className="tiny muted">多样性得分</div>
+                                  <div>{pfAnalysis.analysis?.diversity_score ?? '-'}</div>
+                                </div>
+                                <div>
+                                  <div className="tiny muted">风险等级</div>
+                                  <div>{pfAnalysis.analysis?.risk_level ?? '-'}</div>
+                                </div>
+                                <div>
+                                  <div className="tiny muted">最大个股权重</div>
+                                  <div>{fmtPct(100*(pfAnalysis.analysis?.metrics?.single_stock_weight || 0))}</div>
+                                </div>
+                                <div>
+                                  <div className="tiny muted">行业集中度</div>
+                                  <div>{fmtPct(100*(pfAnalysis.analysis?.metrics?.sector_concentration || 0))}</div>
+                                </div>
+                                <div>
+                                  <div className="tiny muted">加权平均PE</div>
+                                  <div>{pfAnalysis.analysis?.metrics?.avg_pe ?? '-'}</div>
+                                </div>
+                              </div>
+                              {(pfAnalysis.analysis?.main_issues?.length || 0) > 0 && (
+                                <div style={{ marginTop: 8 }}>
+                                  <div className="tiny muted">主要问题</div>
+                                  <ul className="tiny">
+                                    {pfAnalysis.analysis.main_issues.map((it, idx) => (<li key={idx}>{it}</li>))}
+                                  </ul>
+                                </div>
+                              )}
+                              {(pfAnalysis.analysis?.suggestions?.length || 0) > 0 && (
+                                <div style={{ marginTop: 8 }}>
+                                  <div className="tiny muted">建议</div>
+                                  <ul className="tiny">
+                                    {pfAnalysis.analysis.suggestions.map((it, idx) => (<li key={idx}>{it}</li>))}
+                                  </ul>
+                                </div>
+                              )}
+                              {pfAnalysis.summary_text && (
+                                <div style={{ marginTop: 8 }} className="tiny">
+                                  {pfAnalysis.summary_text}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="chart-wrap" style={{ minWidth: 260, flex:'1 1 260px', height: 260 }}>
                       <canvas id="chart-portfolio"></canvas>
                     </div>
+                  </div>
+                </div>
+
+                {/* 组合仪表板 */}
+                <div className="card">
+                  <div className="row" style={{ justifyContent:'space-between' }}>
+                    <div style={{ flex:'1 1 420px' }}>
+                      <div className="tiny muted">权重树状图</div>
+                      <div className="chart-wrap" style={{ height: 260 }}>
+                        <canvas id="chart-pf-treemap"></canvas>
+                      </div>
+                      <div className="tiny muted" style={{ marginTop: 8 }}>根据持仓市值分布生成</div>
+                    </div>
+                    <div className="chart-wrap" style={{ minWidth: 260, flex:'1 1 260px', height: 260 }}>
+                      <div className="tiny muted">风险雷达图</div>
+                      <canvas id="chart-pf-radar"></canvas>
+                      <div className="tiny muted" style={{ marginTop: 8 }}>依赖 AI 诊断指标</div>
+                    </div>
+                  </div>
+                  <div className="row" style={{ marginTop: 12, gap: 16 }}>
+                    <div style={{ flex:'1 1 420px' }}>
+                      <div className="tiny muted">相关性热力图</div>
+                      <div id="pf-heatmap" style={{ overflow:'auto', maxHeight: 280 }}></div>
+                    </div>
+                    <div className="chart-wrap" style={{ minWidth: 260, flex:'1 1 260px', height: 260 }}>
+                      <div className="tiny muted">贡献趋势（堆叠面积）</div>
+                      <canvas id="chart-pf-stacked"></canvas>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <button onClick={refreshPortfolioDashboard} disabled={portfolio.length===0}>刷新图表</button>
+                    <span className="tiny muted" style={{ marginLeft: 10 }}>组合发生变化后点击刷新更新数据</span>
                   </div>
                 </div>
               </>

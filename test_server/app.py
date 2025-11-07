@@ -8,6 +8,8 @@ from flask_cors import CORS
 
 import yfinance as yf
 import pandas as pd
+import urllib.request
+import urllib.error
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WATCHLIST_PATH = os.path.join(APP_DIR, "watchlist.json")
@@ -508,6 +510,298 @@ def get_company(symbol: str):
         return jsonify({"info": info, "fundamentals": fundamentals, "financials": financials})
     except Exception as e:
         return jsonify({"error": str(e), "info": {"symbol": sym}}), 500
+
+
+# ----------------------
+# 投资组合AI诊断（规则引擎）
+# ----------------------
+def _normalize_weights(holdings):
+    total = sum(float(h.get('weight', 0) or 0) for h in holdings) or 0.0
+    if total <= 0:
+        n = len(holdings)
+        if n == 0:
+            return []
+        return [{**h, 'weight': 1.0 / n} for h in holdings]
+    return [{**h, 'weight': (float(h.get('weight', 0) or 0) / total)} for h in holdings]
+
+def _portfolio_hhi(weights):
+    return sum((w or 0.0) ** 2 for w in weights)
+
+def _portfolio_diversity_score(weights):
+    hhi = _portfolio_hhi(weights)
+    score = max(0.0, min(1.0, 1.0 - hhi)) * 100.0
+    return round(score, 1), hhi
+
+def _fetch_company_basic(sym: str):
+    try:
+        t = yf.Ticker(sym)
+        info = {}
+        try:
+            info = t.get_info() or {}
+        except Exception:
+            try:
+                info = t.info or {}
+            except Exception:
+                info = {}
+        sector = info.get('sector') or info.get('industry') or 'Unknown'
+        pe = info.get('trailingPE') or info.get('forwardPE')
+        if pe is None:
+            pe = info.get('trailing_pe') or info.get('forward_pe')
+        try:
+            pe = float(pe) if pe is not None else None
+        except Exception:
+            pe = None
+        return {'sector': sector, 'pe': pe}
+    except Exception:
+        return {'sector': 'Unknown', 'pe': None}
+
+def _sector_concentration(holdings, sector_map):
+    weights_by_sector = {}
+    for h in holdings:
+        sym = h.get('symbol')
+        w = float(h.get('weight', 0) or 0)
+        sec = (sector_map.get(sym) or 'Unknown')
+        weights_by_sector[sec] = weights_by_sector.get(sec, 0.0) + w
+    max_sec_weight = max(weights_by_sector.values()) if weights_by_sector else 0.0
+    return round(max_sec_weight, 4), weights_by_sector
+
+def _weighted_avg_pe(holdings, pe_map):
+    num = 0.0
+    den = 0.0
+    for h in holdings:
+        w = float(h.get('weight', 0) or 0)
+        sym = h.get('symbol')
+        pe = pe_map.get(sym)
+        if pe is None or not (pe == pe):
+            continue
+        num += w * float(pe)
+        den += w
+    if den <= 1e-9:
+        return None
+    return round(num / den, 2)
+
+def _assess_portfolio_risk(single_stock_weight, sector_conc, avg_pe):
+    high = (single_stock_weight > 0.30) or (sector_conc > 0.70) or ((avg_pe or 0) > 25)
+    if high:
+        return '高'
+    medium = (single_stock_weight > 0.20) or (sector_conc > 0.50) or ((avg_pe or 0) > 20)
+    if medium:
+        return '中'
+    return '低'
+
+@app.post("/api/portfolio/diagnostic")
+def portfolio_diagnostic():
+    try:
+        data = request.get_json(force=True) or {}
+        holdings = data.get('holdings') or []
+        clean = []
+        for h in holdings:
+            sym = str(h.get('symbol', '')).upper().strip()
+            w = float(h.get('weight', 0) or 0)
+            if not sym:
+                continue
+            clean.append({'symbol': sym, 'weight': w})
+        clean = _normalize_weights(clean)
+        weights = [h['weight'] for h in clean]
+        diversity_score, hhi = _portfolio_diversity_score(weights)
+        single_stock_weight = max(weights) if weights else 0.0
+        sector_map = {}
+        pe_map = {}
+        for h in clean:
+            info = _fetch_company_basic(h['symbol'])
+            sector_map[h['symbol']] = info.get('sector')
+            pe_map[h['symbol']] = info.get('pe')
+        sector_conc, sector_weights = _sector_concentration(clean, sector_map)
+        avg_pe = _weighted_avg_pe(clean, pe_map)
+        risk_level = _assess_portfolio_risk(single_stock_weight, sector_conc, avg_pe)
+
+        analysis = {
+            'diversity_score': diversity_score,
+            'risk_level': risk_level,
+            'main_issues': [],
+            'suggestions': [],
+            'metrics': {
+                'hhi': round(hhi, 4),
+                'single_stock_weight': round(single_stock_weight, 4),
+                'sector_concentration': round(sector_conc, 4),
+                'avg_pe': avg_pe,
+            },
+            'sector_weights': sector_weights,
+        }
+
+        if sector_conc > 0.70:
+            analysis['main_issues'].append('行业过度集中')
+            analysis['suggestions'].append('考虑加入消费、医疗、公用事业等防御性板块')
+        elif sector_conc > 0.50:
+            analysis['main_issues'].append('行业集中度偏高')
+            analysis['suggestions'].append('适当引入跨行业标的，控制行业相关性')
+
+        if single_stock_weight > 0.30:
+            analysis['main_issues'].append('单一个股权重过高')
+            analysis['suggestions'].append('建议单股不超过总仓位20%')
+        elif single_stock_weight > 0.20:
+            analysis['main_issues'].append('最大个股权重偏高')
+            analysis['suggestions'].append('关注尾部标的补齐提升分散度')
+
+        if (avg_pe or 0) > 25:
+            analysis['main_issues'].append('整体估值偏高')
+            analysis['suggestions'].append('关注低估值价值股或红利类资产平衡组合')
+        elif (avg_pe or 0) > 20:
+            analysis['main_issues'].append('估值处于偏高区间')
+            analysis['suggestions'].append('适度降低成长风格权重，提升防御或现金流稳定标的')
+
+        issues = '、'.join(analysis['main_issues']) if analysis['main_issues'] else '整体结构均衡'
+        suggestions = '；'.join(analysis['suggestions']) if analysis['suggestions'] else '维持现有配置，关注个股基本面变化'
+        summary_text = (
+            f"多样性得分 {diversity_score}，风险等级 {risk_level}；"
+            f"最大个股权重 {round(single_stock_weight*100,1)}%，行业集中度 {round(sector_conc*100,1)}%，"
+            f"加权平均PE {avg_pe if avg_pe is not None else '-'}。主要问题：{issues}。建议：{suggestions}。"
+        )
+
+        return jsonify({'ok': True, 'analysis': analysis, 'summary_text': summary_text, 'holdings': clean})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': 'portfolio_diagnostic_failed', 'detail': str(e)}), 500
+
+
+# ---- AI 分析接口（DeepSeek/OpenAI兼容HTTP） ----
+def _call_deepseek_chat(system_msg: str, user_msg: str) -> Dict[str, Any]:
+    api_key = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return {"error": "API key not configured. Set DEEPSEEK_API_KEY."}
+    url = "https://api.deepseek.com/v1/chat/completions"
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        "max_tokens": 300,
+        "temperature": 0.7,
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Authorization", f"Bearer {api_key}")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read()
+            j = json.loads(body.decode("utf-8"))
+            # OpenAI兼容返回结构
+            try:
+                content = j["choices"][0]["message"]["content"].strip()
+            except Exception:
+                content = None
+            return {"content": content, "raw": j}
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode("utf-8")
+        except Exception:
+            err_body = str(e)
+        return {"error": f"HTTP {e.code}: {err_body}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.post("/api/ai_analysis")
+def ai_analysis():
+    data = request.get_json(force=True, silent=True) or {}
+    symbol = str(data.get("symbol", "")).upper().strip()
+    fin = data.get("financial_data") or {}
+    # 兼容字段名
+    current_price = fin.get("currentPrice")
+    change_percent = fin.get("changePercent")
+    pe_ratio = fin.get("peRatio")
+    rsi14 = fin.get("rsi14")
+
+    prompt = (
+        f"作为投资顾问，请分析 {symbol}：\n\n"
+        f"当前价格: ${current_price}\n"
+        f"涨跌幅: {change_percent}%\n"
+        f"市盈率: {pe_ratio if pe_ratio is not None else 'N/A'}\n"
+        f"RSI: {rsi14 if rsi14 is not None else 'N/A'}\n\n"
+        "请提供简短的投资建议，包括：\n"
+        "1. 技术面分析\n"
+        "2. 风险提示\n"
+        "3. 操作建议\n\n"
+        "要求：专业但易懂，150字以内。"
+    )
+    sys_msg = "你是一名专业的金融分析师，善于用通俗语言解释复杂概念"
+    result = _call_deepseek_chat(sys_msg, prompt)
+    if result.get("error"):
+        err = str(result.get("error"))
+        # 余额不足时降级到本地简化分析，返回200并携带warning
+        if "HTTP 402" in err or "Insufficient Balance" in err:
+            analysis = _local_ai_analysis(symbol, current_price, change_percent, pe_ratio, rsi14)
+            return jsonify({"symbol": symbol, "analysis": analysis, "warning": "insufficient_balance", "source": "local"})
+        # 其他错误：仍尝试返回本地简化分析，携带通用warning
+        analysis = _local_ai_analysis(symbol, current_price, change_percent, pe_ratio, rsi14)
+        return jsonify({"symbol": symbol, "analysis": analysis, "warning": "fallback", "source": "local", "error": err})
+    return jsonify({"symbol": symbol, "analysis": result.get("content"), "source": "deepseek"})
+
+
+def _local_ai_analysis(symbol: str, current_price: Any, change_percent: Any, pe_ratio: Any, rsi14: Any) -> str:
+    """基于基础指标的简化本地分析，控制在约150字以内。"""
+    try:
+        price = current_price
+        chg = change_percent
+        pe = pe_ratio
+        rsi = rsi14
+        parts = []
+        # 技术面
+        tech = []
+        if rsi is not None:
+            try:
+                r = float(rsi)
+                if r <= 30:
+                    tech.append("RSI低位，超卖偏强")
+                elif r >= 70:
+                    tech.append("RSI高位，超买风险")
+                else:
+                    tech.append("RSI中性")
+            except Exception:
+                tech.append("RSI数据有限")
+        if chg is not None:
+            try:
+                c = float(chg)
+                if c >= 2:
+                    tech.append("短期上行动能较强")
+                elif c <= -2:
+                    tech.append("短期回撤压力显著")
+            except Exception:
+                pass
+        if tech:
+            parts.append("技术面：" + "，".join(tech))
+        # 风险
+        risk = []
+        if pe is not None:
+            try:
+                p = float(pe)
+                if p >= 30:
+                    risk.append("估值偏高，波动或放大")
+                elif p <= 10:
+                    risk.append("估值偏低，但基本面需确认")
+            except Exception:
+                pass
+        risk.append("注意事件风险与市场环境")
+        parts.append("风险提示：" + "，".join(risk))
+        # 操作建议
+        op = []
+        try:
+            r = float(rsi) if rsi is not None else None
+            if r is not None and r <= 30:
+                op.append("轻仓试探，分批建仓")
+            elif r is not None and r >= 70:
+                op.append("谨慎减仓，等待回落")
+            else:
+                op.append("观望为主，关注支撑与成交量")
+        except Exception:
+            op.append("以风险控制为先，设定止损")
+        parts.append("操作建议：" + "，".join(op))
+        text = "；".join(parts)
+        # 控制长度
+        return text[:160]
+    except Exception:
+        return "数据有限，建议观望并做好风险控制。"
 
 
 @app.route("/")
