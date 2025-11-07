@@ -16,7 +16,12 @@
 		- COMPARITIVE
 			- basic concept teaching(tags)![[Pasted image 20251107093907.png]]
 			- AI analysis : 投资健康度分析, ![[Pasted image 20251107093814.png]]
-- frontend 
+- frontend / backend
+	- 关注/热门股票/指数/ETF: 实时动态数据 价格 涨跌 timeseries 公司信息 AI分析
+		- 针对基本概念解析
+		- AI 分析未来趋势
+	- 我的投资组合: 数量价格, 可视化图表 &rArr; 占比
+		- 针对我的投资组合进行分析, 给出合理建议
 - backend
 
 _Thinking..._
