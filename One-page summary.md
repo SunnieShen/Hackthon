@@ -18,60 +18,73 @@ Young investors (18-35) are paying **painful tuition fees** due to lack of syste
 
 > **Core Issue**: Information overload but knowledge deficiency, tools fragmentation but lack of integration, experience shortage but no guidance
 
-### **Solution: From "Information Dumping" to "Intelligent Insights"**
+## Project Overview
+This is a stock investment analysis web platform developed based on the Flask framework, integrating real-time market data acquisition, technical indicator analysis, investment portfolio diagnostics, and AI intelligent analysis. The platform uses the yfinance library to fetch data from Yahoo Finance, providing investors with comprehensive stock market analysis tools to help them make more informed investment decisions.
 
-##### **Fundamental Differences from Traditional Products**
+## Four Core Feature Pages
 
-| Dimension                  | Traditional Products (East Money/Snowball) | **TradeScope (Ours)**                                                |
-| -------------------------- | ------------------------------------------ | -------------------------------------------------------------------- |
-| **Information Processing** | Data dumping, user self-filtering          | **AI-extracted key signals** + personalized推送                        |
-| **Analysis Depth**         | Basic charts + community opinions          | **Multi-dimensional health scoring** + risk quantification           |
-| **Learning Support**       | Standardized articles/videos               | **Contextual concept explanations** + real-time investment education |
-| **Decision Support**       | Historical data display                    | **AI trend analysis** + personalized action recommendations          |
-##### **Technical Differentiation Highlights**
-- **Investment Health Engine**: Comprehensive scoring: diversification(30%)+risk(30%)+sector(25%)+liquidity(15%)
-- **AI Concept Coach**: Hover to see **plain-language explanations** of professional terms
-- **Personalized Learning Path**: **Customized educational content** based on portfolio weaknesses
+### 1. Watchlist
+- **Core Function**: Personalized stock tracking management
+- **Main Features**:
+  - Add/Remove custom tracked stocks
+  - Real-time price display and percentage change monitoring
+  - Technical indicator calculations (SMA, RSI, MACD, Bollinger Bands)
+  - Data persistence storage
+- **Technical Implementation**: Local JSON file storage, RESTful API interfaces
 
-### **Product Features: Integrated Investment Learning Platform**
+### 2. Hot Stocks
+- **Core Function**: Real-time quotes display for mainstream tech stocks
+- **Coverage**: 10 high-attention stocks including AAPL, MSFT, NVDA, AMZN
+- **Data Dimensions**:
+  - Real-time prices and trading volume
+  - Intraday high/low prices
+  - 52-week price range
+  - Complete technical indicator analysis
+- **Value Proposition**: Quickly grasp the performance of market leading stocks
 
-##### **Intelligent Monitoring Module**
-- Real-time tracking of 50+ technical indicators, automatic key signal identification
-- **Highlight**: **One-click plain-language explanations** of complex indicators (MACD, RSI, etc.)
-##### **Portfolio Health Analysis**
-- Visual display of holding structure, sector distribution, risk exposure
-- **Highlight**: Quantified scoring + specific improvement suggestions, **making risks "visible"**
-##### **AI Investment Coach**
-- Personalized learning content based on user trading behavior
-- **Highlight**: **Contextual teaching** combined with real-time market conditions
+### 3. Market Indices
+- **Core Function**: Monitoring of global major indices and sector ETFs
+- **Index Categories**:
+  - **Global Indices**: S&P 500, Dow Jones, Nasdaq, FTSE 100, etc.
+  - **Sector ETFs**: 9 major sectors including Technology, Financials, Energy, Healthcare
+- **Special Features**:
+  - Index constituent stocks display
+  - Cross-market linkage analysis
+  - Sector rotation tracking
+- **Application Value**: Insights into macro market trends and sector performance
 
-> **Core Value**: Not only telling users "what happened", but also explaining "why it matters" and "how to respond"
-### **Competitive Analysis & Market Opportunity**
-##### **Competitive Landscape Insights**
-- **Traditional Broker Apps**: Transaction-focused, complex interfaces, steep learning curve
-- **Financial Information Platforms**: Information overload, lack of personalization  
-- **Investment Communities**: Mixed opinions, inconsistent quality
-- **Our Positioning**: **AI-Powered Personal Investment Coach** - Analysis+Education+Decision Support in one
-##### **Target User Validation**
-- 89% of respondents need "one-click portfolio risk analysis"
-- 76% willing to use "AI investment coach" to improve investment knowledge
-- **Market Gap**: Existing products are either too professional (brokers) or too entertainment-focused (communities)
-### **Technical Implementation & Innovation**
-##### **Frontend Experience**
-- Intuitive visual dashboard: Holding distribution, trend charts, health scores
-- Interactive learning: Click to view concept explanations, **lowering learning barriers**
-##### **Backend Capabilities**  
-- Multi-source data integration: Market data + fundamentals + sentiment analysis
-- AI algorithm engine: Technical + fundamental + personalized recommendations
-- Real-time risk monitoring: Automatic alerts for abnormal fluctuations and allocation risks
-### **Expected Impact & Value Proposition**
-##### **Quantifiable Goals**
-- Reduce user irrational trading behavior by 25%
-- Improve user investment knowledge mastery by 40% within 6 months  
-- Help avoid 80% of obvious allocation errors
-##### **Social Value**
-Drive the transformation of young investors from "**blind following**" to "**rational decision-making**", cultivate long-term wealth management habits, and enhance overall financial literacy.
+### 4. Portfolio Analysis
+- **Core Function**: Intelligent portfolio diagnostics and optimization suggestions
+- **Analysis Dimensions**:
+  - **Diversification Assessment**: HHI index calculation for diversity scoring
+  - **Risk Analysis**: Single stock concentration, sector concentration, valuation levels
+  - **Fundamental Diagnostics**: Weighted average PE, sector distribution
+- **AI Enhancement**:
+  - Rule engine-based automatic risk assessment
+  - Personalized rebalancing suggestions
+  - DeepSeek AI integration for deep analysis
+- **Core Value**: Scientific quantification of portfolio health
 
-**TradeScope - Making Every Investment Decision Evidence-Based**  
-*Data-Driven Decisions · AI-Powered Learning · Visual Risk Management*
+## Competitive Advantages: Comparison with Traditional Tools
+
+| Feature Dimension | Our Platform | Traditional Broker Apps | Professional Financial Websites | Professional Terminals |
+|:---|:---|:---|:---|:---|
+| **Core Positioning** | Intelligent Decision Support System | Trade Execution Tool | Information Aggregation Portal | Institutional-grade Data Terminal |
+| **Function Focus** | Data analysis, portfolio diagnostics, AI insights | Order execution, basic quotes | News, announcements, community discussions | Comprehensive market depth data, historical backtesting |
+| **Integration Level** | ⭐⭐⭐⭐⭐<br>Highly Integrated | ⭐⭐<br>Fragmented Functions | ⭐⭐<br>Information Fragmentation | ⭐⭐⭐⭐<br>Comprehensive but complex |
+| **Analysis Depth** | ⭐⭐⭐⭐<br>Automatic technical indicators + Portfolio risk diagnostics | ⭐<br>Only basic indicators | ⭐⭐<br>Provides data but lacks deep analysis | ⭐⭐⭐⭐⭐<br>Extreme depth, supports complex modeling |
+| **Intelligence** | ⭐⭐⭐⭐<br>Rule Engine + AI Hybrid Intelligence | ⭐<br>Almost no intelligent analysis | ❌ | ⭐⭐⭐<br>Powerful, but requires user expertise |
+| **User Experience** | ⭐⭐⭐⭐<br>Simple and intuitive | ⭐⭐⭐<br>Smooth, but trade-oriented | ⭐⭐<br>Cluttered pages, many ads | ⭐<br>Extremely complex, steep learning curve |
+| **Cost** | 💲 (Potentially free or low cost) | 💲 (Usually free) | 💲 (Usually free) | 💲💲💲💲💲 (Extremely expensive) |
+| **Target Users** | Retail investors seeking professional analysis | Average traders | Information browsers | Institutional analysts, professional traders |
+
+### Key Limitations and Specific Improvement Plans
+
+| Category | Specific Issues | Concrete Solutions |
+|----------|-----------------|-------------------|
+| **Data Issues** | Only fetches data from Yahoo Finance, often missing China A-share data | 1. Add Tencent Finance as additional data source<br>2. Integrate Sina Finance API<br>3. Implement automatic data completion mechanism |
+| **Performance Issues** | Recalculates all indicators on every refresh, slow loading | 1. Install Redis to cache price data<br>2. Pre-calculate technical indicators and cache them<br>3. Replace JSON files with MySQL database |
+| **Functionality Gaps** | Cannot record purchase prices and quantities, no actual P&L visibility | 1. Add position cost input fields<br>2. Implement profit/loss calculation functionality<br>3. Add returns trend charts |
+| **User Experience** | All users see the same watchlist, no personalization | 1. Add user registration and login functionality<br>2. Implement separate data storage for each user<br>3. Support customizable dashboard layout |
+
 
