@@ -1,7 +1,41 @@
 - [ ] pitch deck/ ppt
 
 - [ ] demo
+pure text:
+**[Simplified English Script: TradeScope - Your AI-Powered Investment Coach]**
+
+**(Opens on the Watchlist Dashboard)**
+
+"Welcome to TradeScope, the AI-driven investment platform designed for young investors. We solve three core pain points: information overload, decision anxiety, and knowledge gaps."
+
+"View Apple's stock details. TradeScope's **Intelligent Monitoring Module** tracks over 50 technical indicators in real-time."
+
+"Easily adjust the viewing period from 2 years to 5 years for trend analysis, or switch to hourly/5-minute charts for granular insights. The chart updates dynamically, displaying price action alongside key indicators like SMA20 and Bollinger Bands."
+
+"The **AI Concept Coach** is directly integrated – hover over any professional term for an instant, plain-language explanation, lowering the learning barrier."
+
+"Dive deeper into company fundamentals. View Apple's industry classification, market cap, and business overview."
+
+"Key fundamental metrics like PE(TTM) and Forward PE include instant explanations on hover, helping you quickly grasp professional terminology."
+
+"Latest financial data including revenue and gross profit comes with meaningful context – we don't just show 'what happened,' but explain 'why it matters'."
+
+ "The **AI Investment Coach** provides immediate intelligent assessment: 'Technical: RSI high, overbought risk; Action: Trim positions cautiously, wait for pullback.' Data-driven insights help avoid emotional trading."
+
+"'Hot Stocks' helps discover market opportunities, while 'Indices' provides macro perspectives and sector ETF performance for diversified investment decisions."
+
+"The Portfolio module comprehensively manages your holdings. After adding AAPL, BTC, and META, the system automatically calculates market value and visualizes distribution with pie charts."
+
+ "The **Investment Health Engine** provides comprehensive diagnostics: diversity scores, risk levels, and identifies key issues like 'sector concentration too high' with actionable improvement suggestions like 'introduce cross-sector holdings' and 'cap single stock weight at 20%'. It makes risks visible and advice actionable."
+
+"Multi-dimensional visualizations – weight treemaps, risk radars, correlation heatmaps – combined with AI diagnostics create a **Personalized Learning Path** with customized educational content targeting portfolio weaknesses."
+
+“TradeScope is more than a monitoring tool – it's your **AI Personal Investment Coach**. We help reduce irrational trading by 25%, improve investment knowledge mastery by 40% within six months, and avoid 80% of obvious allocation errors. Data-Driven Decisions, AI-Powered Learning, Visual Risk Management."
+
+
 ![[Video 2025-11-07 10.41.25.mov]]
+
+
 This demo script is designed to walk through the features of the "Watchlist Dashboard (with charts)" tool, highlighting how it addresses the specific challenges faced by young investors, as outlined in the "One-page summary.md" document.
 
 ---
